@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  service-a:
+    build:
+      context: ./service-a
+    volumes:
+      - ./service-a:/app
+    ports:
+      - 8888:8888
+
+  service-b:
+    build:
+      context: ./service-b
+    volumes:
+      - ./service-b:/app
