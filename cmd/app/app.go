@@ -43,12 +43,8 @@ func (a *App) Poll(ctx context.Context) (uint, error) {
 func (a *App) WriteNthFibNum(ctx context.Context, n uint) {
 	f, err := Fib(n)
 	if err != nil {
-		a.l.Printf(
-			"FibNum %d: %d\n", n, f,
-		)
-	} else {
-		a.l.Printf(
-			"FibNum %d: %v\n", n, err,
-		)
+		a.l.Printf("Fibonacci(%d): %v\n", n, err)
 	}
+	a.l.Printf("Fibonacci(%d) = %d\n", n, f)
+
 }
