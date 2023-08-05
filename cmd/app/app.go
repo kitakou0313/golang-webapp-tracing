@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const name = "fib"
@@ -48,6 +51,17 @@ func (a *App) Poll(ctx context.Context) (uint, error) {
 
 	var n uint
 	_, err := fmt.Fscanf(a.r, "%d\n", &n)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return 0, err
+	}
+
+	nStr := strconv.FormatUint(uint64(n), 10)
+	span.SetAttributes(attribute.String(
+		"repeat.n", nStr,
+	))
+
 	return n, err
 }
 
@@ -59,7 +73,12 @@ func (a *App) WriteNthFibNum(ctx context.Context, n uint) {
 		_, span := otel.Tracer(name).Start(ctx, "Fib")
 		defer span.End()
 
-		return Fib(n)
+		fib, err := Fib(n)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		return fib, err
 	}(ctx)
 
 	if err != nil {
