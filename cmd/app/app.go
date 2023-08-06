@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const name = "fib"
@@ -72,21 +73,24 @@ func (a *App) WriteNthFibNum(ctx context.Context, n uint) {
 	rand.Seed(seed)
 
 	ctx, span := otel.Tracer(name).Start(ctx, "WriteNthFibNum")
-
-	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
-
 	defer span.End()
+	span.SetAttributes(attribute.String("currentFunc", "Write"))
+
+	span.AddEvent("Wating random seconds...")
+	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+	span.AddEvent("Restart!")
 
 	f, err := func(ctx context.Context) (uint64, error) {
-		_, span := otel.Tracer(name).Start(ctx, "Fib")
+		currentCtx, span := otel.Tracer(name).Start(ctx, "Fib")
 		defer span.End()
 
 		time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
 		fib, err := Fib(n)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			currentSpan := trace.SpanFromContext(currentCtx)
+			currentSpan.RecordError(err)
+			currentSpan.SetStatus(codes.Error, err.Error())
 		}
 		return fib, err
 	}(ctx)
