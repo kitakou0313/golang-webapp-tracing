@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"strconv"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -66,12 +68,20 @@ func (a *App) Poll(ctx context.Context) (uint, error) {
 }
 
 func (a *App) WriteNthFibNum(ctx context.Context, n uint) {
+	seed := time.Now().UnixNano()
+	rand.Seed(seed)
+
 	ctx, span := otel.Tracer(name).Start(ctx, "WriteNthFibNum")
+
+	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+
 	defer span.End()
 
 	f, err := func(ctx context.Context) (uint64, error) {
 		_, span := otel.Tracer(name).Start(ctx, "Fib")
 		defer span.End()
+
+		time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
 		fib, err := Fib(n)
 		if err != nil {

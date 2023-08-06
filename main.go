@@ -3,25 +3,27 @@ package main
 import (
 	"context"
 	"go-tracing/cmd/app"
-	"io"
 	"log"
 	"os"
 	"os/signal"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
-func newExporter(w io.Writer) (trace.SpanExporter, error) {
-	return stdouttrace.New(
-		stdouttrace.WithWriter(w),
-		stdouttrace.WithPrettyPrint(),
+func newExporter(ctx context.Context) (trace.SpanExporter, error) {
+	client := otlptracehttp.NewClient(
+		otlptracehttp.WithEndpoint("jaeger:4318"),
+		otlptracehttp.WithInsecure(),
 	)
+	exporter, err := otlptrace.New(ctx, client)
 
+	return exporter, err
 }
 
 func newResource() *resource.Resource {
@@ -66,13 +68,9 @@ func main() {
 
 	l := log.New(os.Stdout, "", 0)
 
-	f, err := os.Create("trace.txt")
-	if err != nil {
-		l.Fatal(err)
-	}
-	defer f.Close()
+	ctx := context.Background()
 
-	exp, err := newExporter(f)
+	exp, err := newExporter(ctx)
 	if err != nil {
 		l.Fatal(err)
 	}
@@ -82,7 +80,7 @@ func main() {
 		trace.WithResource(newResource()),
 	)
 	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
+		if err := tp.Shutdown(ctx); err != nil {
 			l.Fatal(err)
 		}
 	}()
