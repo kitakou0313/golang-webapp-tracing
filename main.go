@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"go-tracing/cmd/app"
+	"fmt"
 	"log"
-	"os"
-	"os/signal"
+	"net/http"
+	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -31,7 +33,7 @@ func newResource() *resource.Resource {
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("fib"),
+			semconv.ServiceName("trace-with-http"),
 			semconv.ServiceVersion("v0.1.0"),
 			attribute.String("environment", "demo"),
 		),
@@ -40,39 +42,112 @@ func newResource() *resource.Resource {
 	return r
 }
 
-func main() {
-	// e := echo.New()
+func fibWithTrace() {
+	// // e := echo.New()
 
-	// e.GET("/service-a-endpoint", func(c echo.Context) error {
-	// 	url := "http://service-b:8080/service-b-endpoint"
+	// // e.GET("/service-a-endpoint", func(c echo.Context) error {
+	// // 	url := "http://service-b:8080/service-b-endpoint"
 
-	// 	for i := 0; i < 10; i++ {
-	// 		resp, err := http.Get(url)
-	// 		if err != nil {
-	// 			e.Logger.Error(err.Error())
-	// 			return c.String(http.StatusInternalServerError, "Error:"+err.Error())
-	// 		}
-	// 		defer resp.Body.Close()
+	// // 	for i := 0; i < 10; i++ {
+	// // 		resp, err := http.Get(url)
+	// // 		if err != nil {
+	// // 			e.Logger.Error(err.Error())
+	// // 			return c.String(http.StatusInternalServerError, "Error:"+err.Error())
+	// // 		}
+	// // 		defer resp.Body.Close()
 
-	// 		byteArray, _ := ioutil.ReadAll(resp.Body)
-	// 		e.Logger.Info((string(byteArray))) // htmlをstringで取得
+	// // 		byteArray, _ := ioutil.ReadAll(resp.Body)
+	// // 		e.Logger.Info((string(byteArray))) // htmlをstringで取得
+	// // 	}
+
+	// // 	return c.String(http.StatusOK, "Hello from service-a!")
+	// // })
+	// // e.GET("/service-b-endpoint", func(c echo.Context) error {
+	// // 	return c.String(http.StatusOK, "Hello from service-b!")
+	// // })
+
+	// // e.Logger.Fatal(e.Start(":8080"))
+
+	// l := log.New(os.Stdout, "", 0)
+
+	// ctx := context.Background()
+
+	// exp, err := newExporter(ctx)
+	// if err != nil {
+	// 	l.Fatal(err)
+	// }
+
+	// tp := trace.NewTracerProvider(
+	// 	trace.WithBatcher(exp),
+	// 	trace.WithResource(newResource()),
+	// )
+	// defer func() {
+	// 	if err := tp.Shutdown(ctx); err != nil {
+	// 		l.Fatal(err)
 	// 	}
+	// }()
+	// otel.SetTracerProvider(tp)
 
-	// 	return c.String(http.StatusOK, "Hello from service-a!")
-	// })
-	// e.GET("/service-b-endpoint", func(c echo.Context) error {
-	// 	return c.String(http.StatusOK, "Hello from service-b!")
-	// })
+	// sigCh := make(chan os.Signal, 1)
+	// signal.Notify(sigCh, os.Interrupt)
 
-	// e.Logger.Fatal(e.Start(":8080"))
+	// errCh := make(chan error)
 
-	l := log.New(os.Stdout, "", 0)
+	// app := app.NewApp(os.Stdin, l)
 
+	// go func() {
+	// 	errCh <- app.Run(context.Background())
+	// }()
+
+	// select {
+	// case <-sigCh:
+	// 	l.Println("\nGoodBye")
+	// 	return
+	// case err := <-errCh:
+	// 	if err != nil {
+	// 		l.Fatal(err)
+	// 	}
+	// }
+}
+
+var tracer = otel.Tracer(
+	"test-instrumented-libs",
+)
+
+func sleepy(ctx context.Context) {
+	_, span := tracer.Start(ctx, "sleep")
+	defer span.End()
+
+	time.Sleep(1 * time.Second)
+	span.SetAttributes(
+		attribute.Int("sleep.duration", int(1*time.Second)),
+	)
+}
+
+func httpHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, I am instrumented automatically!")
+	ctx := r.Context()
+	sleepy(ctx)
+}
+
+func traceWithInstrumentedLibs() {
+	handler := http.HandlerFunc(httpHandler)
+	wrappedHandler := otelhttp.NewHandler(
+		handler, "hello-instrumented",
+	)
+	http.Handle("/hello-instrumented", wrappedHandler)
+
+	log.Fatal(http.ListenAndServe(
+		":3030", nil,
+	))
+}
+
+func main() {
 	ctx := context.Background()
 
 	exp, err := newExporter(ctx)
 	if err != nil {
-		l.Fatal(err)
+		log.Fatal(err)
 	}
 
 	tp := trace.NewTracerProvider(
@@ -81,29 +156,10 @@ func main() {
 	)
 	defer func() {
 		if err := tp.Shutdown(ctx); err != nil {
-			l.Fatal(err)
+			log.Fatal(err)
 		}
 	}()
 	otel.SetTracerProvider(tp)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
-
-	errCh := make(chan error)
-
-	app := app.NewApp(os.Stdin, l)
-
-	go func() {
-		errCh <- app.Run(context.Background())
-	}()
-
-	select {
-	case <-sigCh:
-		l.Println("\nGoodBye")
-		return
-	case err := <-errCh:
-		if err != nil {
-			l.Fatal(err)
-		}
-	}
+	traceWithInstrumentedLibs()
 }
