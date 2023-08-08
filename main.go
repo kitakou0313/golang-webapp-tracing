@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -42,32 +45,39 @@ func newResource() *resource.Resource {
 	return r
 }
 
+func traceWithEcho() {
+	e := echo.New()
+
+	e.GET("/service-a-endpoint", func(c echo.Context) error {
+		url := "http://localhost:8080/service-b-endpoint"
+
+		for i := 0; i < 10; i++ {
+			// resp, err := http.Get(url)
+			resp, err := otelhttp.Get(c.Request().Context(), url)
+
+			if err != nil {
+				e.Logger.Error(err.Error())
+				return c.String(http.StatusInternalServerError, "Error:"+err.Error())
+			}
+			defer resp.Body.Close()
+
+			byteArray, _ := ioutil.ReadAll(resp.Body)
+			e.Logger.Info((string(byteArray))) // htmlをstringで取得
+		}
+
+		return c.String(http.StatusOK, "Hello from service-a!")
+	})
+	e.GET("/service-b-endpoint", func(c echo.Context) error {
+		return c.String(http.StatusOK, "Hello from service-b!")
+	})
+
+	e.Use(otelecho.Middleware("instrumented-echo"))
+
+	e.Logger.Fatal(e.Start(":8080"))
+
+}
+
 func fibWithTrace() {
-	// // e := echo.New()
-
-	// // e.GET("/service-a-endpoint", func(c echo.Context) error {
-	// // 	url := "http://service-b:8080/service-b-endpoint"
-
-	// // 	for i := 0; i < 10; i++ {
-	// // 		resp, err := http.Get(url)
-	// // 		if err != nil {
-	// // 			e.Logger.Error(err.Error())
-	// // 			return c.String(http.StatusInternalServerError, "Error:"+err.Error())
-	// // 		}
-	// // 		defer resp.Body.Close()
-
-	// // 		byteArray, _ := ioutil.ReadAll(resp.Body)
-	// // 		e.Logger.Info((string(byteArray))) // htmlをstringで取得
-	// // 	}
-
-	// // 	return c.String(http.StatusOK, "Hello from service-a!")
-	// // })
-	// // e.GET("/service-b-endpoint", func(c echo.Context) error {
-	// // 	return c.String(http.StatusOK, "Hello from service-b!")
-	// // })
-
-	// // e.Logger.Fatal(e.Start(":8080"))
-
 	// l := log.New(os.Stdout, "", 0)
 
 	// ctx := context.Background()
@@ -161,5 +171,5 @@ func main() {
 	}()
 	otel.SetTracerProvider(tp)
 
-	traceWithInstrumentedLibs()
+	traceWithEcho()
 }
