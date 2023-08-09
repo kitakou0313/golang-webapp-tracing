@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/labstack/echo/middleware"
 	"github.com/labstack/echo/v4"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -49,7 +50,7 @@ func traceWithEcho() {
 	e := echo.New()
 
 	e.GET("/service-a-endpoint", func(c echo.Context) error {
-		url := "http://localhost:8080/service-b-endpoint"
+		url := "http://service-b:8080/service-b-endpoint"
 
 		for i := 0; i < 10; i++ {
 			// resp, err := http.Get(url)
@@ -72,6 +73,9 @@ func traceWithEcho() {
 	})
 
 	e.Use(otelecho.Middleware("instrumented-echo"))
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: "method=${method}, uri=${uri}, status=${status} header=${header:traceparent}\n",
+	}))
 
 	e.Logger.Fatal(e.Start(":8080"))
 

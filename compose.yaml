@@ -7,9 +7,10 @@ services:
   #   ports:
   #     - 8080:8080
 
-  # service-b:
-  #   build:
-  #     context: ./
+  service-b:
+    build:
+      context: ./
+    command: 'go run .'
   jaeger:
     image: jaegertracing/all-in-one:latest
     environment:
