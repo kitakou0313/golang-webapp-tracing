@@ -11,6 +11,8 @@ services:
     build:
       context: ./
     command: 'go run .'
+    volumes:
+      - ./:/app
   jaeger:
     image: jaegertracing/all-in-one:latest
     environment:
