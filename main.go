@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/dubonzi/otelresty"
+	"github.com/go-resty/resty/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -52,30 +55,34 @@ func traceWithEcho() {
 	e.GET("/service-a-endpoint", func(c echo.Context) error {
 		url := "http://service-b:8080/service-b-endpoint"
 
+		cli := resty.New()
+		opts := []otelresty.Option{otelresty.WithTracerName("service-a-rest-client")}
+		otelresty.TraceClient(cli, opts...)
+
 		for i := 0; i < 10; i++ {
 			// resp, err := http.Get(url)
-			resp, err := otelhttp.Get(c.Request().Context(), url)
+			_, err := cli.R().SetContext(c.Request().Context()).Get(url)
 
 			if err != nil {
 				e.Logger.Error(err.Error())
 				return c.String(http.StatusInternalServerError, "Error:"+err.Error())
 			}
-			defer resp.Body.Close()
-
-			byteArray, _ := ioutil.ReadAll(resp.Body)
-			e.Logger.Info((string(byteArray))) // htmlをstringで取得
 		}
 
 		return c.String(http.StatusOK, "Hello from service-a!")
 	})
 	e.GET("/service-b-endpoint", func(c echo.Context) error {
+		fmt.Println(c.Request().Header)
+		// ここでtraceparent headerが見えていない
+		// service-bへのリクエスト時にheaderにtraceparentヘッダーが設定されていない
+		// otelhttp.Getを見直す必要あり
 		return c.String(http.StatusOK, "Hello from service-b!")
 	})
 
-	e.Use(otelecho.Middleware("instrumented-echo"))
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-		Format: "method=${method}, uri=${uri}, status=${status} header=${header:traceparent}\n",
+		Format: "method=${method}, uri=${uri}, status=${status} user_agent=${user_agent} trace-header=${traceparent}\n",
 	}))
+	e.Use(otelecho.Middleware("instrumented-echo" + strconv.Itoa((rand.Intn(100)))))
 
 	e.Logger.Fatal(e.Start(":8080"))
 
