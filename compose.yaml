@@ -13,12 +13,22 @@ services:
     command: 'go run .'
     volumes:
       - ./:/app
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
+  # jaeger:
+  #   image: jaegertracing/all-in-one:latest
+  #   environment:
+  #     - COLLECTOR_OTLP_ENABLED=true
+  #   ports:
+  #     - 16686:16686
+
+  oap:
+    image: apache/skywalking-oap-server:9.5.0
+  
+  oap-ui:
+    image: apache/skywalking-ui:9.5.0
     ports:
-      - 16686:16686
+      - 9090:8080
+    environment:
+      - SW_OAP_ADDRESS=http://oap:12800
   
   golang-dev:
     image: golang:1.20

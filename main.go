@@ -4,20 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
-	"strconv"
 	"time"
 
-	"github.com/dubonzi/otelresty"
-	"github.com/go-resty/resty/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
+	_ "github.com/apache/skywalking-go"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -55,13 +51,12 @@ func traceWithEcho() {
 	e.GET("/service-a-endpoint", func(c echo.Context) error {
 		url := "http://service-b:8080/service-b-endpoint"
 
-		cli := resty.New()
-		opts := []otelresty.Option{otelresty.WithTracerName("service-a-rest-client")}
-		otelresty.TraceClient(cli, opts...)
+		// cli := resty.New()
+		// opts := []otelresty.Option{otelresty.WithTracerName("service-a-rest-client")}
+		// otelresty.TraceClient(cli, opts...)
 
 		for i := 0; i < 10; i++ {
-			// resp, err := http.Get(url)
-			_, err := cli.R().SetContext(c.Request().Context()).Get(url)
+			_, err := http.Get(url)
 
 			if err != nil {
 				e.Logger.Error(err.Error())
@@ -82,7 +77,7 @@ func traceWithEcho() {
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 		Format: "method=${method}, uri=${uri}, status=${status} user_agent=${user_agent} trace-header=${traceparent}\n",
 	}))
-	e.Use(otelecho.Middleware("instrumented-echo" + strconv.Itoa((rand.Intn(100)))))
+	// e.Use(otelecho.Middleware("instrumented-echo" + strconv.Itoa((rand.Intn(100)))))
 
 	e.Logger.Fatal(e.Start(":8080"))
 
@@ -164,23 +159,23 @@ func traceWithInstrumentedLibs() {
 }
 
 func main() {
-	ctx := context.Background()
+	// ctx := context.Background()
 
-	exp, err := newExporter(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// exp, err := newExporter(ctx)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(exp),
-		trace.WithResource(newResource()),
-	)
-	defer func() {
-		if err := tp.Shutdown(ctx); err != nil {
-			log.Fatal(err)
-		}
-	}()
-	otel.SetTracerProvider(tp)
+	// tp := trace.NewTracerProvider(
+	// 	trace.WithBatcher(exp),
+	// 	trace.WithResource(newResource()),
+	// )
+	// defer func() {
+	// 	if err := tp.Shutdown(ctx); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }()
+	// otel.SetTracerProvider(tp)
 
 	traceWithEcho()
 }
