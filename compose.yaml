@@ -32,3 +32,26 @@ services:
   
   golang-dev:
     image: golang:1.20
+    environment:
+      - SW_AGENT_REPORTER_GRPC_BACKEND_SERVICE=http://oap:12800
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
+    ports:
+      - "9100:9100"
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.82.0 
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "13133:13133" 
+      - "55678"
