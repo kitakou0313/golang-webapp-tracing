@@ -22,6 +22,9 @@ services:
 
   oap:
     image: apache/skywalking-oap-server:9.5.0
+    environment:
+      - SW_OTEL_RECEIVER=default
+      - SW_OTEL_RECEIVER_ENABLED_OC_RULES=vm
   
   oap-ui:
     image: apache/skywalking-ui:9.5.0
