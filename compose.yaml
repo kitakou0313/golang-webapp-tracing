@@ -7,10 +7,11 @@ services:
   #   ports:
   #     - 8080:8080
   db:
-    image: postgres:15.4
+    image: mysql:8.1.0
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: password
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d
 
   service-b:
     build:

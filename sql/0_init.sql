@@ -1,0 +1,7 @@
+CREATE DATABASE IF NOT EXISTS `test`;
+
+USE `test`;
+
+CREATE TABLE `user` (
+  `name` VARCHAR(191) NOT NULL
+) ENGINE=InnoDB;
