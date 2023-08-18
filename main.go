@@ -7,9 +7,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -45,18 +50,43 @@ func newResource() *resource.Resource {
 	return r
 }
 
+var (
+	db *sqlx.DB
+)
+
+func connectDB() (*sqlx.DB, error) {
+	config := mysql.NewConfig()
+	config.Net = "tcp"
+	config.Addr = "db:3306"
+	config.User = "test"
+	config.Passwd = "password"
+	config.DBName = "test"
+
+	// return sqlx.Open("mysql", config.FormatDSN())
+	return otelsqlx.Open("mysql", config.FormatDSN())
+}
+
+type UserRow struct {
+	Name string `db:"name"`
+}
+
 func traceWithEcho() {
 	e := echo.New()
 
-	e.GET("/service-a-endpoint", func(c echo.Context) error {
-		url := "http://service-b:8080/service-b-endpoint"
+	db, err := connectDB()
+	if err != nil {
+		panic(err)
+	}
 
-		// cli := resty.New()
-		// opts := []otelresty.Option{otelresty.WithTracerName("service-a-rest-client")}
-		// otelresty.TraceClient(cli, opts...)
-
+	e.GET("/hello", func(c echo.Context) error {
+		var row UserRow
 		for i := 0; i < 10; i++ {
-			_, err := http.Get(url)
+			err := db.GetContext(
+				c.Request().Context(),
+				&row,
+				"SELECT * FROM user WHERE `name` = ?",
+				"test",
+			)
 
 			if err != nil {
 				e.Logger.Error(err.Error())
@@ -64,20 +94,13 @@ func traceWithEcho() {
 			}
 		}
 
-		return c.String(http.StatusOK, "Hello from service-a!")
-	})
-	e.GET("/service-b-endpoint", func(c echo.Context) error {
-		fmt.Println(c.Request().Header)
-		// ここでtraceparent headerが見えていない
-		// service-bへのリクエスト時にheaderにtraceparentヘッダーが設定されていない
-		// otelhttp.Getを見直す必要あり
-		return c.String(http.StatusOK, "Hello from service-b!")
+		return c.String(http.StatusOK, "Hello from "+row.Name)
 	})
 
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 		Format: "method=${method}, uri=${uri}, status=${status} user_agent=${user_agent} trace-header=${traceparent}\n",
 	}))
-	// e.Use(otelecho.Middleware("instrumented-echo" + strconv.Itoa((rand.Intn(100)))))
+	e.Use(otelecho.Middleware("instrumented-echo-and-sqlx"))
 
 	e.Logger.Fatal(e.Start(":8080"))
 
@@ -159,23 +182,23 @@ func traceWithInstrumentedLibs() {
 }
 
 func main() {
-	// ctx := context.Background()
+	ctx := context.Background()
 
-	// exp, err := newExporter(ctx)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	exp, err := newExporter(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// tp := trace.NewTracerProvider(
-	// 	trace.WithBatcher(exp),
-	// 	trace.WithResource(newResource()),
-	// )
-	// defer func() {
-	// 	if err := tp.Shutdown(ctx); err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// }()
-	// otel.SetTracerProvider(tp)
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(exp),
+		trace.WithResource(newResource()),
+	)
+	defer func() {
+		if err := tp.Shutdown(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	otel.SetTracerProvider(tp)
 
 	traceWithEcho()
 }

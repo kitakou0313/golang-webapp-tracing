@@ -9,7 +9,9 @@ services:
   db:
     image: mysql:8.1.0
     environment:
-      MYSQL_ROOT_PASSWORD: password
+      MYSQL_USER: test
+      MYSQL_PASSWORD: password
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
     volumes:
       - ./sql:/docker-entrypoint-initdb.d
 
@@ -19,12 +21,12 @@ services:
     command: 'go run .'
     volumes:
       - ./:/app
-  # jaeger:
-  #   image: jaegertracing/all-in-one:latest
-  #   environment:
-  #     - COLLECTOR_OTLP_ENABLED=true
-  #   ports:
-  #     - 16686:16686
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - 16686:16686
 
   oap:
     image: apache/skywalking-oap-server:9.5.0
