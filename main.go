@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -80,19 +81,27 @@ func traceWithEcho() {
 
 	e.GET("/hello", func(c echo.Context) error {
 		var row UserRow
-		for i := 0; i < 10; i++ {
-			err := db.GetContext(
-				c.Request().Context(),
-				&row,
-				"SELECT * FROM user WHERE `name` = ?",
-				"test",
-			)
 
-			if err != nil {
-				e.Logger.Error(err.Error())
-				return c.String(http.StatusInternalServerError, "Error:"+err.Error())
-			}
+		var wg sync.WaitGroup
+		wg.Add(10)
+
+		for i := 0; i < 10; i++ {
+			go func() {
+				err := db.GetContext(
+					c.Request().Context(),
+					&row,
+					"SELECT * FROM user WHERE `name` = ?",
+					"test",
+				)
+
+				if err != nil {
+					e.Logger.Error(err.Error())
+				}
+				wg.Done()
+			}()
 		}
+
+		wg.Wait()
 
 		return c.String(http.StatusOK, "Hello from "+row.Name)
 	})
